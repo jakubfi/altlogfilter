@@ -55,7 +55,7 @@ class LogLine:
         else:
             id = ""
 
-        return "%s%s%s%s: %s" % (color, self.level, endcolor, id, self.message)
+        return "%s%s%s%s%s: %s" % (" " * 4*self.indent, color, self.level, endcolor, id, self.message)
 
 # ------------------------------------------------------------------------
 class LogFilter:
