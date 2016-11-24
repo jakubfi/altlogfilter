@@ -4,6 +4,7 @@ import re
 import sys
 import os
 import argparse
+import subprocess
 
 # ------------------------------------------------------------------------
 class LogLine:
@@ -59,8 +60,7 @@ class LogLine:
 # ------------------------------------------------------------------------
 class LogFilter:
     # --------------------------------------------------------------------
-    def __init__(self, pass_all, debug=0):
-        self.pass_all = pass_all
+    def __init__(self, debug=0):
         self.debug = debug
         self.filters = []
         self.supp = []
@@ -92,7 +92,7 @@ class LogFilter:
 
     # --------------------------------------------------------------------
     def process(self, l):
-        if self.pass_all or not self.is_suppressed(l):
+        if not self.is_suppressed(l):
             print(l)
         else:
             try:
@@ -107,32 +107,53 @@ class LogFilter:
 # parse commandline
 
 parser = argparse.ArgumentParser()
-parser.add_argument("-s", "--suppress", help="Suppress contition specified as: <level:id:min_indent_level>, any element can be ommited, colons are mandatory", action='append', default=[])
-parser.add_argument("-n", "--nothing", help="Suppress nothing (ommit all default filters)", default=0, const=1, action="store_const")
-parser.add_argument("-d", "--debug", help="Enable filter debug", default=0, const=1, action="store_const")
-parser.add_argument("-S", "--stats", help="Show suppression statistics", default=0, const=1, action="store_const")
-parser.add_argument("-c", "--color", help="Use colored output", default=0, const=1, action="store_const")
+parser.add_argument("-f", "--filter", help="suppression filter specified as: <level:id:min_indent_level>, any element can be ommited, colons are mandatory", action='append', default=[])
+parser.add_argument("-n", "--nodefault", help="ommit default filters", default=0, const=1, action="store_const")
+parser.add_argument("-N", "--nothing", help="suppress nothing (ommit all filters - default and specified)", default=0, const=1, action="store_const")
+parser.add_argument("-d", "--debug", help="enable filter debug", default=0, const=1, action="store_const")
+parser.add_argument("-S", "--stats", help="show message suppression statistics", default=0, const=1, action="store_const")
+parser.add_argument("-c", "--color", help="use colored output", default=0, const=1, action="store_const")
+parser.add_argument('command', nargs='+', help='altera command to run (with arguments)')
 args = parser.parse_args()
+
+# respect NALF environment variable
+
+try:
+    if os.environ['NALF'] == "1":
+        args.nothing = 1
+except:
+    pass
 
 # setup default filters
 
-flt = LogFilter(args.nothing, debug=args.debug)
-flt.add("Info::")
-flt.add("Extra Info::")
-flt.add(":20028:")
-flt.add(":292013:")
-flt.add(":332012:")
-flt.add("::1")
+flt = LogFilter(debug=args.debug)
+
+if args.nodefault != 1 and args.nothing != 1:
+    flt.add("Info::")
+    flt.add("Extra Info::")
+    flt.add(":20028:")
+    flt.add(":292013:")
+    flt.add(":332012:")
+    flt.add("::1")
+
+# add user filters
+
+if args.nothing != 1:
+    for f in args.filter:
+        flt.add(f)
+
+# spawn child process
+
+joined_args = ' '.join(args.command)
+p = subprocess.Popen(joined_args, shell=True, stdin=subprocess.DEVNULL, stdout=subprocess.PIPE, bufsize=0, universal_newlines=True)
 
 # parse output
 
-errors = 0
 while True:
-    line = sys.stdin.readline()
-    if not line: break
+    line = p.stdout.readline()
+    if not line:
+        break
     l = LogLine(line, args.color)
-    if "Error" in l.level:
-        errors += 1
     flt.process(l)
 
 # print suppression statistics
@@ -143,6 +164,8 @@ if args.stats and flt.suppressed:
         print(" %s=%i"% (s, flt.suppressed[s]), end="")
     print("")
 
-sys.exit(errors)
+p.wait()
+
+sys.exit(p.returncode)
 
 # vim: tabstop=4 expandtab shiftwidth=4 softtabstop=4
