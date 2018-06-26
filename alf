@@ -153,7 +153,6 @@ if args.nodefault != 1 and args.nothing != 1:
     flt.add(":332012:")
     flt.add(":18236:")
     flt.add(":20030:")
-    flt.add(":292013:")
     flt.add("::1")
 
 # add user filters
